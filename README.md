@@ -21,6 +21,6 @@ For example, data_25434.csv:
 3,11.000000,1
 4,11.000000,1
 
-Where the first colum is the sample number,
-the second colum is the round trip latency,
-and the third colum is the connection ID.
+Where the first column is the sample number,
+the second column is the round trip latency,
+and the third column is the connection ID.
