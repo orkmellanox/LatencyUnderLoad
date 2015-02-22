@@ -1,5 +1,5 @@
 CC 		= g++
-CFLAGS 	+=  -std=c++0x 
+CFLAGS 	+=  -std=c++0x -g 
 LDFLAGS += 
 OBJECTS	= main.o server.o client.o common.o cbuffer.o
 TARGETS	= latencyLoadTest
