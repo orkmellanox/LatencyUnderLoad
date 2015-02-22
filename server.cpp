@@ -11,8 +11,7 @@ void handle_interupt_signal(int sig_num)
 } 
 
 server_t::server_t(){
-	msg_count = 0;
-	efd = -1;
+
 	lfd = -1;
 	init_epoll();
 	init_socket();

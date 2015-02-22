@@ -13,12 +13,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include <deque>
-#include <queue>
 #include <map>
 #include <chrono>
 
 #include "cbuffer.h"
+#include "squeue.h"
 
 #define CHECK_EQUAL(verb, act_val, exp_val, cmd) if((exp_val) != (act_val)){ \
     printf("Error in %s, expected value %d, actual value %d\n",(verb), (exp_val), (act_val));			\
@@ -62,7 +61,13 @@ extern	bool is_finished; // flag to indicate that test finished.
 
 class runner_t {
 public:
-        runner_t(){};
+        runner_t() : writable_socket_list(config.mps * (config.number_connection + NUM_EXTRA_CONNECTION)), 
+			readable_socket_list(config.mps * (config.number_connection + NUM_EXTRA_CONNECTION)), 
+			readable_connection_list(config.mps * (config.number_connection + NUM_EXTRA_CONNECTION)) 
+		{
+			msg_count = 0;
+			efd = -1;
+		};
         virtual ~runner_t(){};
         virtual void run() = 0; // The scenario for running (server - client) side.
 		virtual void print_result() = 0; // Print result of Test.
@@ -80,9 +85,9 @@ public:
 protected:
         unsigned int msg_count;
 		int efd;
-		std::queue<int> writable_socket_list; // List of socket file descriptor that need to be write on. 		
-		std::queue<int> readable_socket_list; // List of socket file descriptor that need to be read from.
-		std::queue<int> readable_connection_list; // List of read socket file descriptor that need to be handled.
+		simple_queue<int> writable_socket_list; // List of socket file descriptor that need to be write on. 		
+		simple_queue<int> readable_socket_list; // List of socket file descriptor that need to be read from.
+		simple_queue<int> readable_connection_list; // List of read socket file descriptor that need to be handled.
 		std::map<int, connection_buffer_t*> write_buffer_list; // Map for each socket file descriptor and it write buffer.
 		std::map<int, connection_buffer_t*> read_buffer_list; // Map for each socket file descriptor and it read buffer.
 		
@@ -126,9 +131,9 @@ public:
 		void connect_new_socket(int sock_fd);
 
 protected:
-		std::deque<int> socket_list; // List of open socket file descriptor.
+		simple_queue<int> socket_list; // List of open socket file descriptor.
 		std::map<unsigned int, std::chrono::high_resolution_clock::time_point> unaknowledged_packets;// Map for each send and not received message with its send time.
-		std::queue<struct msg_t> msgs; // List of RTT for each generated message.
+		simple_queue<struct msg_t> msgs; // List of RTT for each generated message.
 		std::map<unsigned int, std::chrono::high_resolution_clock::time_point>::iterator iter_send_time;
 		std::map<int, int> fd_id;
 		unsigned int tick_counter;

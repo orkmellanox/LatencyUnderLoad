@@ -12,15 +12,14 @@ void handle_test_timeout(int sig_num)
 	is_finished = true;
 } 
 
-client_t::client_t(){
-
+client_t::client_t() : msgs(config.period * config.mps * (config.number_connection + NUM_EXTRA_CONNECTION)),
+	socket_list(config.number_connection + NUM_EXTRA_CONNECTION)
+{	
 	tick_counter = 1;
-	msg_count = 0;
 	sent_message = 0;
-	efd = -1;
 	send_period = NANO_SEC / (config.mps * config.number_connection); // period in nano second between succeed send iteration
 	connection_is_established = false;
-	
+
 	init_epoll();
 	init_socket();
 	signal(SIGALRM, handle_test_timeout); // Set alarm handler.
@@ -78,7 +77,7 @@ void client_t::connect_new_socket(int sock_fd) {
 
 	epoll_ctl(efd, EPOLL_CTL_DEL, sock_fd, NULL);
 	
-	socket_list.push_back(sock_fd);
+	socket_list.push(sock_fd);
 
 	fd_id[sock_fd] = socket_list.size();
 
@@ -125,14 +124,16 @@ void client_t::run(){
                                         }
                                         else {
                                                 remove_connection(socket_list.front());
-                                                socket_list.pop_front();
+                                                socket_list.pop();
                                         }
                                 }
                                 last_conn = current;
                                 new_connection_period = NANO_SEC * config.period;
                         }
 			if (duration_cast<nanoseconds>(current-last_send).count() >=  send_period){
-				fd = socket_list[tick_counter % socket_list.size()]; //Modulate tick_counter on number of connection and increase it each time to assure that send is balanced distributed on connections. 
+				fd = socket_list.front();
+				socket_list.push(fd);
+				socket_list.pop();
 				start_address = write_buffer_list[fd]->reserve_memory();
 				if (start_address != NULL){ // if there is space in connection buffer then copy new message to connection buffer.
 					memcpy(start_address, &tick_counter, sizeof(tick_counter));// tick_counter is used as message since its unique.
@@ -164,7 +165,7 @@ void client_t::run(){
 	
 	while (socket_list.size()) {
 		remove_connection(socket_list.front());
-		socket_list.pop_front();
+		socket_list.pop();
 	}	
 }
 
