@@ -173,6 +173,7 @@ void server_t::handle_socket_read(){
 				}
 				else if ((rc == 0) || ((rc == -1) && (errno == ECONNRESET))) {
 					remove_connection(fd);
+					break;
 				}
 				else {
 					if ((errno == EAGAIN) || (errno == EBADF)) {
