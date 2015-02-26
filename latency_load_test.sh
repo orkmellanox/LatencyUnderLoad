@@ -110,15 +110,17 @@ fi
 num_cores=${#available_core[@]}
 num_internal_thread_cores=${#vma_interal_thread_cores[@]}
 
+dest_port=$start_port
 for process_id in $(seq 0 1 $((num_process-1))); do
+	dest_port=$((start_port+process_id))
 	core_id=$((process_id%num_cores))
 	internal_thread_core_id=$((process_id%num_internal_thread_cores))
 
 	if [ -n "$vma" ]; then
 		#VMA_TCP_TIMER_RESOLUTION_MSEC=60000 VMA_TIMER_RESOLUTION_MSEC=60000 
-		VMA_TCP_3T_RULES=$three_t_rule VMA_INTERNAL_THREAD_AFFINITY=${vma_interal_thread_cores[internal_thread_core_id]} VMA_PROGRESS_ENGINE_INTERVAL=0 VMA_SELECT_POLL=-1 VMA_RX_POLL=-1 LD_PRELOAD=$vma_path $INTERLEAVE_PARAMETER  taskset -c ${available_core[core_id]} "$TEST" $app_type $SERVER_IP $((start_port+process_id)) $msg_size $mps $duration $num_connection $warm_up $tcp_nodelay $extra_conn &
+		VMA_TCP_3T_RULES=$three_t_rule VMA_INTERNAL_THREAD_AFFINITY=${vma_interal_thread_cores[internal_thread_core_id]} VMA_PROGRESS_ENGINE_INTERVAL=0 VMA_SELECT_POLL=-1 VMA_RX_POLL=-1 LD_PRELOAD=$vma_path $INTERLEAVE_PARAMETER  taskset -c ${available_core[core_id]} "$TEST" $app_type $SERVER_IP $dest_port $msg_size $mps $duration $num_connection $warm_up $tcp_nodelay $extra_conn &
 	else
-		$INTERLEAVE_PARAMETER  taskset -c ${available_core[core_id]} "$TEST" $app_type $SERVER_IP $((start_port+process_id)) $msg_size $mps $duration $num_connection $warm_up $tcp_nodelay $extra_conn &
+		$INTERLEAVE_PARAMETER  taskset -c ${available_core[core_id]} "$TEST" $app_type $SERVER_IP $dest_port $msg_size $mps $duration $num_connection $warm_up $tcp_nodelay $extra_conn &
 	fi
 done
 
