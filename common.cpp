@@ -41,20 +41,16 @@ void runner_t::add_new_connection(int fd) {
 	rc = epoll_ctl(efd, EPOLL_CTL_ADD, fd, &ev); 
 	CHECK_NOT_EQUAL("epoll_ctl EPOLL_CTL_ADD", rc, -1, exit(-1));
 	
-	// Initialize read and write buffer for given socket file descriptor
-	write_buffer_list[fd] 	= new connection_buffer_t(config.message_size);
-	read_buffer_list[fd] 	= new connection_buffer_t(config.message_size);
+	// Initialize connection object.
+	connection_list[fd] = new connection_t(fd, connection_list.size());
 }
 
 /*
 * Remove reserved memory and event related to specific socket (remove from epoll, free reserved send and receive buffer and close fd).
 */
 void runner_t::remove_connection(int fd){
-	std::map<int, connection_buffer_t*>::iterator iter;
 	
-	write_buffer_list.erase(write_buffer_list.find(fd));
-	read_buffer_list.erase(read_buffer_list.find(fd));			  
-	
+	connection_list[fd]->remove_connection();
 	epoll_ctl(efd, EPOLL_CTL_DEL, fd, NULL);
 	close(fd);	
 }

@@ -91,41 +91,59 @@ void server_t::run(){
 		rc = epoll_wait(efd, events, MAX_QUEUED_MASSAGE*config.number_connection, 0);
 		CHECK_NOT_EQUAL("epoll_wait", rc, -1, exit(-1));
 		
-		for (int index = 0; index < rc; index++)
-			readable_socket_list.push(events[index].data.fd);
+		for (int index = 0; index < rc; index++){
+			//New connection is requested
+			if (events[index].data.fd == lfd) {
+				bzero(&cli_addr, sizeof(cli_addr));
+				cli_len = sizeof(cli_addr);
+				fd = accept(lfd, (struct sockaddr *)&cli_addr, &cli_len);
+				if (fd > 0){
+					set_socket_option(fd);
+					add_new_connection(fd);
+				}
+				else if (errno != EAGAIN){
+						printf("Error in accept() \"%s\"\n", strerror(errno)); 
+						exit(-1);
+				}
+			}
+			else {
+				current_connection = connection_list[events[index].data.fd];
+				readable_socket_list.push(current_connection);			
+			}
+		}
 	}
 }
 
 
 void server_t::handle_socket_write(){
 	
-	fd = writable_socket_list.front();
+	current_connection = writable_socket_list.front();
 	writable_socket_list.pop();
 
-	iter = write_buffer_list.find(fd);
-	if (iter != write_buffer_list.end()) { 
-		start_address = iter->second->get_buffer_head();
-		data_size = config.message_size - iter->second->get_first_msg_offset();
+	if (current_connection->is_valid()) {
+		write_buffer = current_connection->get_write_buffer();
+		start_address = write_buffer->get_buffer_head();
+		data_size = config.message_size - write_buffer->get_first_msg_offset();
 		
-		rc = send(fd, start_address, data_size, 0);
+		rc = send(current_connection->get_fd(), start_address, data_size, 0);
 		if (rc >= 0) {
 			//Full message is sent
 			if (rc == data_size){
 				msg_count++;
-				iter->second->free_memory();
+				write_buffer->free_memory();
 			}
 			//Message is not sent completely => reschedule				
 			else {
-				writable_socket_list.push(fd);	
+				writable_socket_list.push(current_connection);	
 			}
-			iter->second->increase_first_msg_offset(rc);
+			write_buffer->increase_first_msg_offset(rc);
 		}
 		else {
 			if (errno == EAGAIN) {
-				writable_socket_list.push(fd);	
+				writable_socket_list.push(current_connection);	
 			}
 			else if (errno == ECONNRESET) {
-				remove_connection(fd);
+				remove_connection(current_connection->get_fd());
 			}	
 			else if (errno != EBADF) {
 				printf("Error in send() \"%s\"\n", strerror(errno));
@@ -137,42 +155,25 @@ void server_t::handle_socket_write(){
 
 void server_t::handle_socket_read(){
 	
-	fd = readable_socket_list.front();
+	current_connection = readable_socket_list.front();
 	readable_socket_list.pop();
-
-	iter = read_buffer_list.find(fd);
-	//New connection is requested
-	if (fd == lfd) {
-		bzero(&cli_addr, sizeof(cli_addr));
-		cli_len = sizeof(cli_addr);
-		fd = accept(lfd, (struct sockaddr *)&cli_addr, &cli_len);
-		if (fd == -1) {
-			if (errno != EAGAIN){
-				printf("Error in accept() \"%s\"\n", strerror(errno)); 
-				exit(-1);
-			}
-		}
-		else {
-			set_socket_option(fd);
-			add_new_connection(fd);
-		}
-	}
-	// data is received
-	else if (iter != read_buffer_list.end()) { 
+	
+	if (current_connection->is_valid()){ 
+		read_buffer = current_connection->get_read_buffer();  
 		while(true) {
-			start_address = iter->second->reserve_memory();
+			start_address = read_buffer->reserve_memory();
 			if (start_address != NULL){
-				data_size = config.message_size - iter->second->get_last_msg_offset();
-				rc = recv(fd, start_address, data_size, 0);
+				data_size = config.message_size - read_buffer->get_last_msg_offset();
+				rc = recv(current_connection->get_fd(), start_address, data_size, 0);
 				if (rc > 0) {
-					iter->second->increase_last_msg_offset(rc);
+					read_buffer->increase_last_msg_offset(rc);
 					//Full message is received
 					if (rc == data_size) {
-						readable_connection_list.push(fd);
+						readable_connection_list.push(current_connection);
 					}
 				}
 				else if ((rc == 0) || ((rc == -1) && (errno == ECONNRESET))) {
-					remove_connection(fd);
+					remove_connection(current_connection->get_fd());
 					break;
 				}
 				else {
@@ -187,41 +188,36 @@ void server_t::handle_socket_read(){
 			}	
 			//No enough buffer to receive message => reschedule			
 			else{
-				readable_socket_list.push(fd);
+				readable_socket_list.push(current_connection);
 				break;
 			}
 		}
-	}
+	}	
 }
 
 void server_t::handle_connection_read(){
 
-	fd = readable_connection_list.front();
+	current_connection = readable_connection_list.front();
 	readable_connection_list.pop();
 
-	iter = read_buffer_list.find(fd);
-	if (iter != read_buffer_list.end()) { 
-		msg_id = (unsigned int*)iter->second->get_buffer_head();
-		start_address = write_buffer_list[fd]->reserve_memory();
+	if (current_connection->is_valid()) {  
+		read_buffer = current_connection->get_read_buffer(); 
+		write_buffer = current_connection->get_write_buffer();		
+		msg_id = (unsigned int*)read_buffer->get_buffer_head();
+		start_address = write_buffer->reserve_memory();
 		if (start_address != NULL){
 			memcpy(start_address, msg_id, sizeof(*msg_id));
-			writable_socket_list.push(fd);	
-			iter->second->free_memory();
+			writable_socket_list.push(current_connection);	
+			write_buffer->free_memory();
 		}
 		//No enough buffer to send message => reschedule	
 		else{
-			readable_connection_list.push(fd);
+			readable_connection_list.push(current_connection);
 		}
 	}
 }		
 
 void server_t::print_result(){
 	
-	unsigned int ignored_messages;
-
-	ignored_messages = config.warm * config.mps;
-
-	if (msg_count > ignored_messages)
-		printf("Received %u messages\n", (msg_count - ignored_messages));
-	
+	printf("Received %u messages\n", msg_count);
 }

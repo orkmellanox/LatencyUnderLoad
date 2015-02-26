@@ -7,10 +7,10 @@
 
 /* This class represent simple queue. */
 template <typename queue_element_t>
-class simple_queue {
+class queue_t {
 public:
-    simple_queue(int max_queue_size);
-    virtual ~simple_queue();
+    queue_t(int max_queue_size);
+    virtual ~queue_t();
 	void push(queue_element_t element);
 	void pop();
 	queue_element_t front();
@@ -25,7 +25,7 @@ protected:
 };
 
 template <typename queue_element_t>
-simple_queue<queue_element_t>::simple_queue(int max_queue_size) {
+queue_t<queue_element_t>::queue_t(int max_queue_size) {
 	this->max_queue_size = max_queue_size;
 	element_list = (queue_element_t*) malloc(max_queue_size * sizeof(queue_element_t));
 	first_element_index = 0;
@@ -34,12 +34,12 @@ simple_queue<queue_element_t>::simple_queue(int max_queue_size) {
 }
 
 template <typename queue_element_t>
-simple_queue<queue_element_t>::~simple_queue() {
+queue_t<queue_element_t>::~queue_t() {
 	free(element_list);
 }
 
 template <typename queue_element_t>
-void simple_queue<queue_element_t>::push(queue_element_t element) {
+inline void queue_t<queue_element_t>::push(queue_element_t element) {
 	if (queue_size < max_queue_size) { 
 		element_list[last_element_index] = element;
 		last_element_index++;		
@@ -54,7 +54,7 @@ void simple_queue<queue_element_t>::push(queue_element_t element) {
 }
 
 template <typename queue_element_t>
-void simple_queue<queue_element_t>::pop() {
+inline void queue_t<queue_element_t>::pop() {
 	if (queue_size > 0) { 
 		first_element_index++;
 		if (first_element_index >= max_queue_size) {
@@ -68,7 +68,7 @@ void simple_queue<queue_element_t>::pop() {
 }
 
 template <typename queue_element_t>
-queue_element_t simple_queue<queue_element_t>::front() {
+inline queue_element_t queue_t<queue_element_t>::front() {
 
 	if (queue_size <= 0) {
 		printf("No elements in queue\n");
@@ -78,6 +78,6 @@ queue_element_t simple_queue<queue_element_t>::front() {
 }
 
 template <typename queue_element_t>
-unsigned int simple_queue<queue_element_t>::size() {
+inline unsigned int queue_t<queue_element_t>::size() {
 	return queue_size;
 }

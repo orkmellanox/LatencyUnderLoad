@@ -12,10 +12,9 @@ void handle_test_timeout(int sig_num)
 	is_finished = true;
 } 
 
-client_t::client_t() : msgs(config.period * config.mps * (config.number_connection + NUM_EXTRA_CONNECTION)),
-	socket_list(config.number_connection + NUM_EXTRA_CONNECTION)
+client_t::client_t() : socket_list(config.number_connection + NUM_EXTRA_CONNECTION)
 {	
-	tick_counter = 1;
+	tick_counter = 0;
 	sent_message = 0;
 	send_period = NANO_SEC / (config.mps * config.number_connection); // period in nano second between succeed send iteration
 	connection_is_established = false;
@@ -79,8 +78,6 @@ void client_t::connect_new_socket(int sock_fd) {
 	
 	socket_list.push(sock_fd);
 
-	fd_id[sock_fd] = socket_list.size();
-
 	send_period = NANO_SEC / (config.mps * socket_list.size());
 	
 	add_new_connection(sock_fd);	
@@ -134,11 +131,14 @@ void client_t::run(){
 				fd = socket_list.front();
 				socket_list.push(fd);
 				socket_list.pop();
-				start_address = write_buffer_list[fd]->reserve_memory();
+				
+				current_connection = connection_list[fd];
+				write_buffer = current_connection->get_write_buffer();
+				start_address = write_buffer->reserve_memory();
 				if (start_address != NULL){ // if there is space in connection buffer then copy new message to connection buffer.
 					memcpy(start_address, &tick_counter, sizeof(tick_counter));// tick_counter is used as message since its unique.
-					unaknowledged_packets[tick_counter] = high_resolution_clock::now(); //insert new message id in unaknowledged_packets list to calculate rtt later.
-					writable_socket_list.push(fd);
+					current_connection->add_unaknowledged_msg();
+					writable_socket_list.push(current_connection);
 				}
 				tick_counter++;
 				last_send = current;
@@ -158,7 +158,8 @@ void client_t::run(){
 				connect_new_socket(events[index].data.fd);
 			}
 			else {
-				readable_socket_list.push(events[index].data.fd);
+				current_connection = connection_list[events[index].data.fd];
+				readable_socket_list.push(current_connection);
 			}
 		}
 	}
@@ -171,30 +172,30 @@ void client_t::run(){
 
 void client_t::handle_socket_write(){
 
-	fd = writable_socket_list.front();
+	current_connection = writable_socket_list.front();
 	writable_socket_list.pop();
 
-	iter = write_buffer_list.find(fd);
-	if (iter != write_buffer_list.end()) {
-		start_address = iter->second->get_buffer_head();
-		data_size = config.message_size - iter->second->get_first_msg_offset();
+	if (current_connection->is_valid()) {
+		write_buffer = current_connection->get_write_buffer();
+		start_address = write_buffer->get_buffer_head();
+		data_size = config.message_size - write_buffer->get_first_msg_offset();
 		
-		rc = send(fd, start_address, data_size, 0);
+		rc = send(current_connection->get_fd(), start_address, data_size, 0);
 		if (rc >= 0) {
-			iter->second->increase_first_msg_offset(rc);
+			write_buffer->increase_first_msg_offset(rc);
 			//Full message is sent
 			if (rc == data_size){
-				iter->second->free_memory();
+				write_buffer->free_memory();
 				sent_message++;
 			}
 			//Message is not sent completely => reschedule				
 			else {
-				writable_socket_list.push(fd);	
+				writable_socket_list.push(current_connection);	
 			}
 		}
 		else {
 			if (errno == EAGAIN) {
-				writable_socket_list.push(fd);	
+				writable_socket_list.push(current_connection);	
 			}
 			else {
 				printf("Error in send() \"%s\"\n", strerror(errno));
@@ -206,21 +207,21 @@ void client_t::handle_socket_write(){
 
 void client_t::handle_socket_read(){
 
-	fd = readable_socket_list.front();
+	current_connection = readable_socket_list.front();
 	readable_socket_list.pop();
 	
-	iter = read_buffer_list.find(fd);
-	if (iter != read_buffer_list.end()) { 
+	if (current_connection->is_valid()) { 
+		read_buffer = current_connection->get_read_buffer();
 		while(true) {
-			start_address = iter->second->reserve_memory();
+			start_address = read_buffer->reserve_memory();
 			if (start_address != NULL){
-				data_size = config.message_size - iter->second->get_last_msg_offset();
-				rc = recv(fd, start_address, data_size, 0);
+				data_size = config.message_size - read_buffer->get_last_msg_offset();
+				rc = recv(current_connection->get_fd(), start_address, data_size, 0);
 				if (rc > 0) {
-					iter->second->increase_last_msg_offset(rc);
+					read_buffer->increase_last_msg_offset(rc);
 					//Full message is received
 					if (rc == data_size) {
-						readable_connection_list.push(fd);
+						readable_connection_list.push(current_connection);
 					}
 				}
 				else if (rc <= 0) {
@@ -235,7 +236,7 @@ void client_t::handle_socket_read(){
 			}	
 			//No enough buffer to receive message => reschedule			
 			else{
-				readable_socket_list.push(fd);
+				readable_socket_list.push(current_connection);
 				break;
 			}
 		}
@@ -244,26 +245,19 @@ void client_t::handle_socket_read(){
 
 void client_t::handle_connection_read(){
 
-	receive_time = high_resolution_clock::now();
-	fd = readable_connection_list.front();
+	current_connection = readable_connection_list.front();
 	readable_connection_list.pop();
-	iter = read_buffer_list.find(fd);
 
-	if (iter != read_buffer_list.end()) { 
-		msg_id = (unsigned int*)iter->second->get_buffer_head();	
-		iter_send_time = unaknowledged_packets.find(*msg_id);
-		if (iter_send_time != unaknowledged_packets.end()) { 
-			msg.rtt = duration_cast<nanoseconds>(receive_time - iter_send_time->second).count();
-			msg.fd = fd;
-			msgs.push(msg);
-			unaknowledged_packets.erase(*msg_id); 
-			msg_count++;
-		}
-		iter->second->free_memory();
-	}	
+	if (current_connection->is_valid()) { 
+		current_connection->record_msg_rtt();
+		read_buffer = current_connection->get_read_buffer();
+		read_buffer->free_memory();
+	}
 }		
 
 void client_t::print_result() {
+	std::map<int, connection_t*>::iterator iter;
+	queue_t<double>* msgs_rtt;
 	unsigned int index, ignored_messages;
 	FILE*  output_file;
 	char file_name[50];
@@ -277,20 +271,25 @@ void client_t::print_result() {
 	ignored_messages = config.warm * config.mps;
 
 	// Save data to file.
-	while(msgs.size() > 0) {
-		msg = msgs.front();
-		if (index >= ignored_messages) {
-			fprintf(output_file, "%u,%f,%d\n", (index- ignored_messages), msg.rtt/1000.0, fd_id[msg.fd]);
-			latency_sum += msg.rtt/1000;
-		}
-		msgs.pop();
-		index++;
+	  for (iter=connection_list.begin(); iter!=connection_list.end(); iter++) {
+		index = 0;
+		msgs_rtt = iter->second->get_msgs_rtt();
+		while (msgs_rtt->size()){
+			index++;	
+			if (index > ignored_messages) {
+				fprintf(output_file, "%u,%f,%d\n", (index- ignored_messages), msgs_rtt->front()/1000.0, iter->second->get_index());
+				latency_sum += msgs_rtt->front()/1000;
+			}
+			msgs_rtt->pop();
+		}	
+		if (index > ignored_messages)
+			msg_count += index;
 	}
 	
-	if (msg_count > ignored_messages) {
+	if (msg_count > 0) {
 		printf("Sent %u messages, sent message rate = %.1f mps\n", sent_message, (sent_message / ((double)config.period * config.number_connection)));
-		printf("Received %u messages, received message rate = %.1f mps\n", (msg_count - ignored_messages), ((msg_count - ignored_messages) / ((double)config.period * config.number_connection)));
-		printf("Average latency = %f\n", (latency_sum / (msg_count - ignored_messages)));
+		printf("Received %u messages, received message rate = %.1f mps\n", msg_count, (msg_count / ((double)config.period * config.number_connection)));
+		printf("Average latency = %f\n", (latency_sum / msg_count));
 	}
 }
 

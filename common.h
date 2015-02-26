@@ -14,10 +14,8 @@
 #include <fcntl.h>
 
 #include <map>
-#include <chrono>
 
-#include "cbuffer.h"
-#include "squeue.h"
+#include "connection.h"
 
 #define CHECK_EQUAL(verb, act_val, exp_val, cmd) if((exp_val) != (act_val)){ \
     printf("Error in %s, expected value %d, actual value %d\n",(verb), (exp_val), (act_val));			\
@@ -32,7 +30,7 @@
   }
   
 #define WARM_UP_PERIOD 2 // Warm Up period in seconds
-#define NUM_EXTRA_CONNECTION 40 // Warm Up period in seconds
+#define NUM_EXTRA_CONNECTION 40 // Number of connection to use with extra option.
 #define SND_RCV_BUFFER_SIZE 4000 // Send and receive buffer size
 #define NANO_SEC 1e9 // Number of nanosecond in second
 
@@ -49,11 +47,6 @@ struct config_t {
 	int	warm; /* warm up period */
 	int	tcp_nodelay; /* TCP_NODELAY option */
 	enum extra_t extra_op; /* Use extra connection for testing close, open or non. */ 
-};
-
-struct msg_t {
-	int		fd;
-	double rtt;
 };
 
 extern 	struct config_t config; // Test configuration
@@ -85,17 +78,16 @@ public:
 protected:
         unsigned int msg_count;
 		int efd;
-		simple_queue<int> writable_socket_list; // List of socket file descriptor that need to be write on. 		
-		simple_queue<int> readable_socket_list; // List of socket file descriptor that need to be read from.
-		simple_queue<int> readable_connection_list; // List of read socket file descriptor that need to be handled.
-		std::map<int, connection_buffer_t*> write_buffer_list; // Map for each socket file descriptor and it write buffer.
-		std::map<int, connection_buffer_t*> read_buffer_list; // Map for each socket file descriptor and it read buffer.
+		queue_t<connection_t*> writable_socket_list; // List of socket file descriptor that need to be write on. 		
+		queue_t<connection_t*> readable_socket_list; // List of socket file descriptor that need to be read from.
+		queue_t<connection_t*> readable_connection_list; // List of read socket file descriptor that need to be handled.
+		std::map<int, connection_t*> connection_list; // Map for each connection file descriptor and it buffers.
 		
 		//Following are variable that used for temporary storage.
-		int fd, rc, data_size;
-		unsigned int* msg_id;
+		int fd, rc, data_size;		
 		uint8_t* start_address;
-		std::map<int, connection_buffer_t*>::iterator iter;
+		connection_t* current_connection;
+		connection_buffer_t *read_buffer, *write_buffer;
 };
 
 class server_t : public runner_t{
@@ -115,6 +107,7 @@ protected:
 		//Following are variable that used for temporary storage.
 		struct sockaddr_in cli_addr;
 		socklen_t cli_len;
+		unsigned int* msg_id;
 };
 
 class client_t : public runner_t {
@@ -131,18 +124,10 @@ public:
 		void connect_new_socket(int sock_fd);
 
 protected:
-		simple_queue<int> socket_list; // List of open socket file descriptor.
-		std::map<unsigned int, std::chrono::high_resolution_clock::time_point> unaknowledged_packets;// Map for each send and not received message with its send time.
-		simple_queue<struct msg_t> msgs; // List of RTT for each generated message.
-		std::map<unsigned int, std::chrono::high_resolution_clock::time_point>::iterator iter_send_time;
-		std::map<int, int> fd_id;
+		queue_t<int> socket_list; // List of open socket file descriptor.
 		unsigned int tick_counter;
 		bool connection_is_established;
 		unsigned int sent_message;
 		double send_period;
-		
-		//Following are variable that used for temporary storage.
-		std::chrono::high_resolution_clock::time_point receive_time;
-		struct msg_t msg;
 };
 
