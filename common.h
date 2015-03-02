@@ -5,14 +5,12 @@
 #include <stdint.h>
 #include <cstdlib>
 #include <errno.h>
-
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/epoll.h>
 #include <unistd.h>
 #include <fcntl.h>
-
 #include <map>
 
 #include "connection.h"
@@ -32,7 +30,6 @@
 #define WARM_UP_PERIOD 2 // Warm Up period in seconds
 #define NUM_EXTRA_CONNECTION 40 // Number of connection to use with extra option.
 #define SND_RCV_BUFFER_SIZE 4000 // Send and receive buffer size
-#define NANO_SEC 1e9 // Number of nanosecond in second
 
 enum extra_t {OPEN, CLOSE, NON};
 

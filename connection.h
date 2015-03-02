@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <cstdlib>
-#include <chrono>
 
 #include "cbuffer.h"
 #include "squeue.h"
+#include "Ticks.h"
 
 class connection_t {
 public:
@@ -30,13 +30,14 @@ protected:
 	int fd, index;
 	connection_buffer_t* write_buffer;
 	connection_buffer_t* read_buffer;
-	queue_t<std::chrono::high_resolution_clock::time_point>* unaknowledged_msgs;// related to client only
+	queue_t<TicksTime>* unaknowledged_msgs;// related to client only
 	queue_t<double>* msgs_rtt; // related to client only
 	bool valid;
 	
 		
 	//Following are variable that used for temporary storage.
-	std::chrono::high_resolution_clock::time_point receive_time;
+	TicksTime time;
+	long nsec;
 	double rtt;	
 };
 
@@ -66,13 +67,14 @@ inline bool connection_t::is_valid(){
 
 inline void connection_t::add_unaknowledged_msg() {
 
-	unaknowledged_msgs->push(std::chrono::high_resolution_clock::now());
+	time.setNow();
+	unaknowledged_msgs->push(time);
 }
 
 inline void connection_t::record_msg_rtt() {
 	 
-	receive_time = std::chrono::high_resolution_clock::now(); 
-	rtt = std::chrono::duration_cast<std::chrono::nanoseconds>(receive_time - unaknowledged_msgs->front()).count();
+	time.setNow();
+	rtt = (time - unaknowledged_msgs->front()).toDecimalUsec();
 	msgs_rtt->push(rtt);
 	unaknowledged_msgs->pop();
 }

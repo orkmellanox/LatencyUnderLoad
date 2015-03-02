@@ -1,8 +1,6 @@
 #include <signal.h>
 
 #include "common.h"
-
- using namespace std::chrono;
   
 /* 
 * Handle time_out interrupt. (End test on client side)
@@ -16,7 +14,7 @@ client_t::client_t() : socket_list(config.number_connection + NUM_EXTRA_CONNECTI
 {	
 	tick_counter = 0;
 	sent_message = 0;
-	send_period = NANO_SEC / (config.mps * config.number_connection); // period in nano second between succeed send iteration
+	send_period = NSEC_IN_SEC / (config.mps * config.number_connection); // period in nano second between succeed send iteration
 	connection_is_established = false;
 
 	init_epoll();
@@ -78,7 +76,7 @@ void client_t::connect_new_socket(int sock_fd) {
 	
 	socket_list.push(sock_fd);
 
-	send_period = NANO_SEC / (config.mps * socket_list.size());
+	send_period = NSEC_IN_SEC / (config.mps * socket_list.size());
 	
 	add_new_connection(sock_fd);	
 	
@@ -87,10 +85,10 @@ void client_t::connect_new_socket(int sock_fd) {
 void client_t::run(){
 	
 	double new_connection_period;
-	high_resolution_clock::time_point last_send, last_conn, current;
+	TicksTime last_send, last_conn, current;
 	struct epoll_event events[MAX_QUEUED_MASSAGE*config.number_connection];
 
-	new_connection_period = (NANO_SEC * config.period) / 2; // period in nano second between succeed new socket opening
+	new_connection_period = (NSEC_IN_SEC * config.period) / 2; // period in nano second between succeed new socket opening
 	
 	// Will finish when time-out event is handled from timer that we set previously.  
 	while (!is_finished) {
@@ -107,14 +105,15 @@ void client_t::run(){
 
                 if ((!connection_is_established) && (socket_list.size() >= config.number_connection)) {
                         connection_is_established = true;
-                        last_send = last_conn = high_resolution_clock::now();
+						last_send.setNow();
+						last_conn.setNow();
                         alarm(config.period + config.warm); // Start timer equal to period given in configuration.
                 }
 
 		// If time elapsed from last send iteration >= send_period then a new send iteration should be handled.
 		if (connection_is_established) {
-			current = high_resolution_clock::now();
-                        if ((config.extra_op != NON) && (duration_cast<nanoseconds>(current-last_conn).count() >=  new_connection_period)) {
+			current.setNow();
+                        if ((config.extra_op != NON) && ((current - last_conn).toNsec() >=  new_connection_period)) {
                                 for (int i = 0; i < NUM_EXTRA_CONNECTION; i++) {
                                         if (config.extra_op == OPEN) {
                                                 open_new_socket();
@@ -124,10 +123,11 @@ void client_t::run(){
                                                 socket_list.pop();
                                         }
                                 }
-                                last_conn = current;
-                                new_connection_period = NANO_SEC * config.period;
+                                last_conn.setNow();
+                                new_connection_period = NSEC_IN_SEC * config.period;
                         }
-			if (duration_cast<nanoseconds>(current-last_send).count() >=  send_period){
+			
+			if ((current - last_send).toNsec() >=  send_period){
 				fd = socket_list.front();
 				socket_list.push(fd);
 				socket_list.pop();
@@ -141,7 +141,7 @@ void client_t::run(){
 					writable_socket_list.push(current_connection);
 				}
 				tick_counter++;
-				last_send = current;
+				last_send.setNow();
 			}
 		}
 		
@@ -277,8 +277,8 @@ void client_t::print_result() {
 		while (msgs_rtt->size()){
 			index++;	
 			if (index > ignored_messages) {
-				fprintf(output_file, "%u,%f,%d\n", (index- ignored_messages), msgs_rtt->front()/1000.0, iter->second->get_index());
-				latency_sum += msgs_rtt->front()/1000;
+				fprintf(output_file, "%u,%f,%d\n", (index- ignored_messages), msgs_rtt->front(), iter->second->get_index());
+				latency_sum += msgs_rtt->front();
 			}
 			msgs_rtt->pop();
 		}	

@@ -1,7 +1,7 @@
 CC 		= g++
-CFLAGS 	+=  -std=c++0x -g 
+CFLAGS 	+= -g
 LDFLAGS += 
-OBJECTS	= main.o server.o client.o common.o cbuffer.o connection.o 
+OBJECTS	= main.o server.o client.o common.o cbuffer.o connection.o Ticks.o 
 TARGETS	= latencyLoadTest
 
 all: $(TARGETS)
@@ -15,9 +15,11 @@ client.o: client.cpp common.h
 	$(CC) -c $(CFLAGS) $<
 common.o: common.cpp common.h connection.h
 	$(CC) -c $(CFLAGS) $<	
-connection.o: connection.cpp connection.h common.h cbuffer.h squeue.h
+connection.o: connection.cpp connection.h common.h cbuffer.h squeue.h Ticks.h
 	$(CC) -c $(CFLAGS) $<	
 cbuffer.o: cbuffer.cpp cbuffer.h
+	$(CC) -c $(CFLAGS) $<		
+Ticks.o: Ticks.cpp Ticks.h ticks_os.h clock.h
 	$(CC) -c $(CFLAGS) $<		
 clean:
 	rm -f $(OBJECTS) $(TARGETS)

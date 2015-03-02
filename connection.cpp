@@ -8,7 +8,7 @@ connection_t::connection_t(int fd, int index) {
 	write_buffer = new connection_buffer_t(config.message_size);
 	read_buffer = new connection_buffer_t(config.message_size);
 	if (!config.server) { 
-		unaknowledged_msgs = new queue_t<std::chrono::high_resolution_clock::time_point>(config.period * config.mps);
+		unaknowledged_msgs = new queue_t<TicksTime>(config.period * config.mps);
 		msgs_rtt = new queue_t<double>(config.period * config.mps);
 	}
 }
