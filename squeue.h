@@ -49,7 +49,7 @@ inline void queue_t<queue_element_t>::push(queue_element_t element) {
 		queue_size++;
 	}
 	else {
-		printf("No available space in queue\n");
+		throw("No available space in queue\n");
 	}
 }
 
@@ -63,7 +63,7 @@ inline void queue_t<queue_element_t>::pop() {
 		queue_size--;
 	}
 	else {
-		printf("No elements in queue\n");
+		throw("No elements in queue\n");
 	}	
 }
 
@@ -71,7 +71,7 @@ template <typename queue_element_t>
 inline queue_element_t queue_t<queue_element_t>::front() {
 
 	if (queue_size <= 0) {
-		printf("No elements in queue\n");
+		throw("No elements in queue\n");
 	}
 	
 	return element_list[first_element_index];
