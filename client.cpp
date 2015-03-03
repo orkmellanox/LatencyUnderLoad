@@ -1,7 +1,7 @@
 #include <signal.h>
 
 #include "common.h"
-  
+
 /* 
 * Handle time_out interrupt. (End test on client side)
 */
@@ -14,7 +14,6 @@ client_t::client_t() : socket_list(config.number_connection + NUM_EXTRA_CONNECTI
 {	
 	tick_counter = 0;
 	sent_message = 0;
-//	send_period = NSEC_IN_SEC / (config.mps * config.number_connection); // period in nano second between succeed send iteration
 	send_period = TicksDuration (NSEC_IN_SEC / (config.mps * config.number_connection)); // period between succeed send iteration
 	connection_is_established = false;
 
@@ -26,7 +25,7 @@ client_t::client_t() : socket_list(config.number_connection + NUM_EXTRA_CONNECTI
 client_t::~client_t(){
 	
 	int rc, fd;
-		
+
 	alarm(0); 
 	rc = close(efd);	
 	CHECK_NOT_EQUAL("close", rc, -1, exit(-1));
@@ -96,37 +95,37 @@ void client_t::run(){
 		
 		// Handle available read (receive) request that is filled in queue(FIFO).
 		int list_size = readable_socket_list.size();
-                for (int i = 0; i < list_size; i++)
-                        handle_socket_read();
+		for (int i = 0; i < list_size; i++)
+			handle_socket_read();
 
 		// Handle read buffer and calculate rtt from received time and saved time in unaknowledged_packets.
-                list_size = readable_connection_list.size();
+		list_size = readable_connection_list.size();
 		for (int i = 0; i < list_size; i++)
-                        handle_connection_read();
+			handle_connection_read();
 
-                if ((!connection_is_established) && (socket_list.size() >= config.number_connection)) {
-                        connection_is_established = true;
-						next_send = TicksTime::now() + send_period;
-						last_conn.setNow();
-                        alarm(config.period + config.warm); // Start timer equal to period given in configuration.
-                }
+		if ((!connection_is_established) && (socket_list.size() >= config.number_connection)) {
+			connection_is_established = true;
+			next_send = TicksTime::now() + send_period;
+			last_conn.setNow();
+			alarm(config.period + config.warm); // Start timer equal to period given in configuration.
+		}
 
 		// If time elapsed from last send iteration >= send_period then a new send iteration should be handled.
 		if (connection_is_established) {
 			current.setNow();
-                        if ((config.extra_op != NON) && (current - last_conn >=  new_connection_period)) {
-                                for (int i = 0; i < NUM_EXTRA_CONNECTION; i++) {
-                                        if (config.extra_op == OPEN) {
-                                                open_new_socket();
-                                        }
-                                        else {
-                                                remove_connection(socket_list.front());
-                                                socket_list.pop();
-                                        }
-                                }
-                                last_conn.setNow();
-                                new_connection_period = TicksDuration(NSEC_IN_SEC * config.period);
-                        }
+			if ((config.extra_op != NON) && (current - last_conn >=  new_connection_period)) {
+				for (int i = 0; i < NUM_EXTRA_CONNECTION; i++) {
+					if (config.extra_op == OPEN) {
+						open_new_socket();
+					}
+					else {
+						remove_connection(socket_list.front());
+						socket_list.pop();
+					}
+				}
+				last_conn.setNow();
+				new_connection_period = TicksDuration(NSEC_IN_SEC * config.period);
+			}
 			
 			if (current >=  next_send){
 				fd = socket_list.front();
@@ -272,7 +271,7 @@ void client_t::print_result() {
 	ignored_messages = config.warm * config.mps;
 
 	// Save data to file.
-	  for (iter=connection_list.begin(); iter!=connection_list.end(); iter++) {
+	for (iter=connection_list.begin(); iter!=connection_list.end(); iter++) {
 		index = 0;
 		msgs_rtt = iter->second->get_msgs_rtt();
 		while (msgs_rtt->size()){
@@ -284,7 +283,7 @@ void client_t::print_result() {
 			msgs_rtt->pop();
 		}	
 		if (index > ignored_messages)
-			msg_count += index;
+		msg_count += index;
 	}
 	
 	if (msg_count > 0) {
