@@ -14,7 +14,8 @@ client_t::client_t() : socket_list(config.number_connection + NUM_EXTRA_CONNECTI
 {	
 	tick_counter = 0;
 	sent_message = 0;
-	send_period = NSEC_IN_SEC / (config.mps * config.number_connection); // period in nano second between succeed send iteration
+//	send_period = NSEC_IN_SEC / (config.mps * config.number_connection); // period in nano second between succeed send iteration
+	send_period = TicksDuration (NSEC_IN_SEC / (config.mps * config.number_connection)); // period between succeed send iteration
 	connection_is_established = false;
 
 	init_epoll();
@@ -76,7 +77,7 @@ void client_t::connect_new_socket(int sock_fd) {
 	
 	socket_list.push(sock_fd);
 
-	send_period = NSEC_IN_SEC / (config.mps * socket_list.size());
+	send_period = TicksDuration(NSEC_IN_SEC / (config.mps * socket_list.size()));
 	
 	add_new_connection(sock_fd);	
 	
@@ -84,11 +85,11 @@ void client_t::connect_new_socket(int sock_fd) {
 
 void client_t::run(){
 	
-	double new_connection_period;
+	TicksDuration new_connection_period;
 	TicksTime last_send, last_conn, current;
 	struct epoll_event events[MAX_QUEUED_MASSAGE*config.number_connection];
 
-	new_connection_period = (NSEC_IN_SEC * config.period) / 2; // period in nano second between succeed new socket opening
+	new_connection_period = TicksDuration((NSEC_IN_SEC * config.period) / 2); // period in nano second between succeed new socket opening
 	
 	// Will finish when time-out event is handled from timer that we set previously.  
 	while (!is_finished) {
@@ -113,7 +114,7 @@ void client_t::run(){
 		// If time elapsed from last send iteration >= send_period then a new send iteration should be handled.
 		if (connection_is_established) {
 			current.setNow();
-                        if ((config.extra_op != NON) && ((current - last_conn).toNsec() >=  new_connection_period)) {
+                        if ((config.extra_op != NON) && (current - last_conn >=  new_connection_period)) {
                                 for (int i = 0; i < NUM_EXTRA_CONNECTION; i++) {
                                         if (config.extra_op == OPEN) {
                                                 open_new_socket();
@@ -124,10 +125,10 @@ void client_t::run(){
                                         }
                                 }
                                 last_conn.setNow();
-                                new_connection_period = NSEC_IN_SEC * config.period;
+                                new_connection_period = TicksDuration(NSEC_IN_SEC * config.period);
                         }
 			
-			if ((current - last_send).toNsec() >=  send_period){
+			if (current - last_send >=  send_period){
 				fd = socket_list.front();
 				socket_list.push(fd);
 				socket_list.pop();

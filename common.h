@@ -125,6 +125,6 @@ protected:
 		unsigned int tick_counter;
 		bool connection_is_established;
 		unsigned int sent_message;
-		double send_period;
+		TicksDuration send_period;
 };
 
