@@ -86,10 +86,10 @@ void client_t::connect_new_socket(int sock_fd) {
 void client_t::run(){
 	
 	TicksDuration new_connection_period;
-	TicksTime last_send, last_conn, current;
+	TicksTime next_send, last_conn, current;
 	struct epoll_event events[MAX_QUEUED_MASSAGE*config.number_connection];
 
-	new_connection_period = TicksDuration((NSEC_IN_SEC * config.period) / 2); // period in nano second between succeed new socket opening
+	new_connection_period = TicksDuration((NSEC_IN_SEC * config.period) / 2); // period between succeed new socket opening
 	
 	// Will finish when time-out event is handled from timer that we set previously.  
 	while (!is_finished) {
@@ -106,7 +106,7 @@ void client_t::run(){
 
                 if ((!connection_is_established) && (socket_list.size() >= config.number_connection)) {
                         connection_is_established = true;
-						last_send.setNow();
+						next_send = TicksTime::now() + send_period;
 						last_conn.setNow();
                         alarm(config.period + config.warm); // Start timer equal to period given in configuration.
                 }
@@ -128,7 +128,7 @@ void client_t::run(){
                                 new_connection_period = TicksDuration(NSEC_IN_SEC * config.period);
                         }
 			
-			if (current - last_send >=  send_period){
+			if (current >=  next_send){
 				fd = socket_list.front();
 				socket_list.push(fd);
 				socket_list.pop();
@@ -142,7 +142,7 @@ void client_t::run(){
 					writable_socket_list.push(current_connection);
 				}
 				tick_counter++;
-				last_send.setNow();
+				next_send += send_period;
 			}
 		}
 		
