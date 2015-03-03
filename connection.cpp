@@ -1,15 +1,17 @@
 #include "common.h"
 
 connection_t::connection_t(int fd, int index) {
-		
+
 	this->fd = fd;
 	this->index = index;
 	valid = true;
 	write_buffer = new connection_buffer_t(config.message_size);
 	read_buffer = new connection_buffer_t(config.message_size);
-	if (!config.server) { 
-		unaknowledged_msgs = new queue_t<TicksTime>(config.period * config.mps);
-		msgs_rtt = new queue_t<double>(config.period * config.mps);
+	// 0.2 is overhead of test period because alarm is not accurate
+	int queue_size = (int )( (config.period+0.2) * config.mps );
+	if (!config.server) {
+		unaknowledged_msgs = new queue_t<TicksTime>(queue_size);
+		msgs_rtt = new queue_t<double>(queue_size);
 	}
 }
 
