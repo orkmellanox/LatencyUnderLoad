@@ -1,6 +1,6 @@
 CC 		= g++
 CFLAGS 	+= -g
-LDFLAGS += 
+LDFLAGS +=  -lrt
 OBJECTS	= main.o server.o client.o common.o cbuffer.o connection.o Ticks.o 
 TARGETS	= latencyLoadTest
 
