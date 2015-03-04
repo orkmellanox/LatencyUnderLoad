@@ -12,7 +12,7 @@ num_process=1
 duration=5
 available_core=('9');#'8' '9' '10' '11' '24' '25' '26' '27'
 vma_interal_thread_cores=('8')
-three_t_rule=1
+three_t_rule=0
 do_kill=1
 vma_path="libvma.so"
 
